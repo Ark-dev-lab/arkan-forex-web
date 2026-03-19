@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and account balance.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User's unique ID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "demoBalance": { "type": "number", "description": "Demo account balance in USD" },
+        "realBalance": { "type": "number", "description": "Real account balance in USD" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "deletionScheduledAt": { "type": "string", "format": "date-time", "description": "Timestamp when account is scheduled for deletion" },
+        "deletionType": { "type": "string", "enum": ["immediate", "delayed"], "description": "Type of deletion requested" }
+      },
+      "required": ["uid", "email", "demoBalance", "realBalance", "role", "createdAt"]
+    },
+    "Trade": {
+      "title": "Trade",
+      "description": "A single forex trade executed by the bot or user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "pair": { "type": "string", "description": "Currency pair, e.g., EURUSD" },
+        "type": { "type": "string", "enum": ["BUY", "SELL"] },
+        "entryPrice": { "type": "number" },
+        "exitPrice": { "type": "number" },
+        "lots": { "type": "number" },
+        "profit": { "type": "number" },
+        "status": { "type": "string", "enum": ["OPEN", "CLOSED"] },
+        "openedAt": { "type": "string", "format": "date-time" },
+        "closedAt": { "type": "string", "format": "date-time" },
+        "accountType": { "type": "string", "enum": ["demo", "real"] },
+        "isAutoTrade": { "type": "boolean" }
+      },
+      "required": ["userId", "pair", "type", "entryPrice", "lots", "status", "openedAt", "accountType"]
+    },
+    "BotSettings": {
+      "title": "BotSettings",
+      "description": "Auto Risk and Bot configuration for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "maxRiskPerTrade": { "type": "number", "description": "Percentage, e.g., 1 for 1%" },
+        "defaultSLPips": { "type": "number" },
+        "defaultTPPips": { "type": "number" },
+        "useTrailingStop": { "type": "boolean" },
+        "trailingStopPips": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "isActive", "updatedAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A deposit or withdrawal transaction.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal"] },
+        "method": { "type": "string", "description": "Bank name or e-wallet name" },
+        "accountNumber": { "type": "string", "description": "Destination or source account number" },
+        "accountName": { "type": "string", "description": "Name on the account" },
+        "status": { "type": "string", "enum": ["pending", "success", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "type", "method", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles."
+    },
+    "/trades/{tradeId}": {
+      "schema": { "$ref": "#/entities/Trade" },
+      "description": "Trade history."
+    },
+    "/bot_settings/{userId}": {
+      "schema": { "$ref": "#/entities/BotSettings" },
+      "description": "Bot settings per user."
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Financial transactions."
+    }
+  }
+}

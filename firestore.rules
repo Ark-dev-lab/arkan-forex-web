@@ -1,0 +1,210 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string (optional)
+    //   - demoBalance: number (required)
+    //   - realBalance: number (required)
+    //   - role: string (required, 'user' or 'admin')
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: trades
+    // Document ID: {tradeId}
+    // Fields:
+    //   - userId: string (required)
+    //   - pair: string (required)
+    //   - type: string (required, 'BUY' or 'SELL')
+    //   - entryPrice: number (required)
+    //   - exitPrice: number (optional)
+    //   - lots: number (required)
+    //   - profit: number (optional)
+    //   - status: string (required, 'OPEN' or 'CLOSED')
+    //   - openedAt: timestamp (required)
+    //   - closedAt: timestamp (optional)
+    //   - accountType: string (required, 'demo' or 'real')
+    //   - isAutoTrade: boolean (optional)
+    //
+    // Collection: bot_settings
+    // Document ID: {userId}
+    // Fields:
+    //   - userId: string (required)
+    //   - isActive: boolean (required)
+    //   - maxRiskPerTrade: number (optional)
+    //   - defaultSLPips: number (optional)
+    //   - defaultTPPips: number (optional)
+    //   - useTrailingStop: boolean (optional)
+    //   - trailingStopPips: number (optional)
+    //   - updatedAt: timestamp (required)
+    //
+    // Collection: transactions
+    // Document ID: {transactionId}
+    // Fields:
+    //   - userId: string (required)
+    //   - amount: number (required)
+    //   - type: string (required, 'deposit' or 'withdrawal')
+    //   - method: string (required)
+    //   - accountNumber: string (optional)
+    //   - accountName: string (optional)
+    //   - status: string (required, 'pending', 'success', 'failed')
+    //   - createdAt: timestamp (required)
+    //   - updatedAt: timestamp (optional)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "ravanda99@gmail.com" && request.auth.token.email_verified == true));
+    }
+    
+    function uidUnchanged(field) {
+      return !(field in request.resource.data) || request.resource.data[field] == request.auth.uid;
+    }
+    
+    function uidNotModified(field) {
+      return !(field in request.resource.data) || request.resource.data[field] == resource.data[field];
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'demoBalance', 'realBalance', 'balance', 'role', 'createdAt', 'deletionScheduledAt', 'deletionType']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             (!('email' in data) || data.email == null || (data.email is string && isValidEmail(data.email) && data.email.size() < 100)) &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() < 100)) &&
+             data.demoBalance is number && data.demoBalance >= 0 &&
+             data.realBalance is number && data.realBalance >= 0 &&
+             (!('balance' in data) || (data.balance is number && data.balance >= 0)) &&
+             data.role in ['user', 'admin'] &&
+             (data.createdAt is timestamp || data.createdAt is string) &&
+             (!('deletionScheduledAt' in data) || (data.deletionScheduledAt is string || data.deletionScheduledAt is timestamp)) &&
+             (!('deletionType' in data) || data.deletionType in ['immediate', 'delayed']);
+    }
+    
+    function isValidTrade(data) {
+      return hasOnlyAllowedFields(['userId', 'pair', 'type', 'orderType', 'limitPrice', 'entryPrice', 'exitPrice', 'lots', 'profit', 'status', 'openedAt', 'closedAt', 'accountType', 'isAutoTrade', 'slPrice', 'tpPrice', 'highestPrice', 'lowestPrice', 'reason', 'closeReason']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.pair is string && data.pair.size() > 0 && data.pair.size() < 20 &&
+             data.type in ['BUY', 'SELL'] &&
+             (!('orderType' in data) || data.orderType in ['MARKET', 'LIMIT']) &&
+             (!('limitPrice' in data) || data.limitPrice == null || (data.limitPrice is number && data.limitPrice > 0)) &&
+             data.entryPrice is number && data.entryPrice > 0 &&
+             (!('exitPrice' in data) || (data.exitPrice is number && data.exitPrice > 0)) &&
+             data.lots is number && data.lots > 0 &&
+             (!('profit' in data) || data.profit is number) &&
+             data.status in ['OPEN', 'CLOSED', 'PENDING'] &&
+             data.openedAt is timestamp &&
+             (!('closedAt' in data) || data.closedAt is timestamp) &&
+             data.accountType in ['demo', 'real'] &&
+             (!('isAutoTrade' in data) || data.isAutoTrade is bool) &&
+             (!('slPrice' in data) || data.slPrice is number) &&
+             (!('tpPrice' in data) || data.tpPrice is number) &&
+             (!('highestPrice' in data) || data.highestPrice is number) &&
+             (!('lowestPrice' in data) || data.lowestPrice is number) &&
+             (!('reason' in data) || (data.reason is string && data.reason.size() < 500)) &&
+             (!('closeReason' in data) || (data.closeReason is string && data.closeReason.size() < 500));
+    }
+    
+    function isValidBotSettings(data) {
+      return hasOnlyAllowedFields(['userId', 'isActive', 'maxRiskPerTrade', 'defaultSLPips', 'defaultTPPips', 'useTrailingStop', 'trailingStopPips', 'updatedAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.isActive is bool &&
+             (!('maxRiskPerTrade' in data) || (data.maxRiskPerTrade is number && data.maxRiskPerTrade > 0 && data.maxRiskPerTrade <= 100)) &&
+             (!('defaultSLPips' in data) || (data.defaultSLPips is number && data.defaultSLPips >= 0)) &&
+             (!('defaultTPPips' in data) || (data.defaultTPPips is number && data.defaultTPPips >= 0)) &&
+             (!('useTrailingStop' in data) || data.useTrailingStop is bool) &&
+             (!('trailingStopPips' in data) || (data.trailingStopPips is number && data.trailingStopPips >= 0)) &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidTransaction(data) {
+      return hasOnlyAllowedFields(['userId', 'amount', 'type', 'method', 'accountNumber', 'accountName', 'status', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.amount is number && data.amount > 0 &&
+             data.type in ['deposit', 'withdrawal'] &&
+             data.method is string && data.method.size() > 0 && data.method.size() < 100 &&
+             (!('accountNumber' in data) || (data.accountNumber is string && data.accountNumber.size() < 100)) &&
+             (!('accountName' in data) || (data.accountName is string && data.accountName.size() < 100)) &&
+             data.status in ['pending', 'success', 'failed'] &&
+             data.createdAt is timestamp &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && uidUnchanged('uid') && request.resource.data.role == 'user';
+      allow update: if (isOwner(userId) || isAdmin()) && 
+                    isValidUser(request.resource.data) && 
+                    uidNotModified('uid') && 
+                    (isAdmin() || (
+                      request.resource.data.role == resource.data.role && 
+                      request.resource.data.realBalance == resource.data.realBalance
+                    )) && 
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner(userId) || isAdmin();
+      
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+    
+    match /trades/{tradeId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidTrade(request.resource.data) && uidUnchanged('userId');
+      allow update: if (isDocOwner() || isAdmin()) && isValidTrade(request.resource.data) && uidNotModified('userId') && request.resource.data.openedAt == resource.data.openedAt && request.resource.data.pair == resource.data.pair && request.resource.data.type == resource.data.type && request.resource.data.entryPrice == resource.data.entryPrice && request.resource.data.lots == resource.data.lots;
+      allow delete: if isAdmin();
+    }
+    
+    match /bot_settings/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidBotSettings(request.resource.data) && uidUnchanged('userId');
+      allow update: if (isOwner(userId) || isAdmin()) && isValidBotSettings(request.resource.data) && uidNotModified('userId');
+    }
+
+    match /transactions/{transactionId} {
+      // Allow public read for the simulator to check status
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidTransaction(request.resource.data) && uidUnchanged('userId');
+      // Allow public update for the simulator (only status to 'success')
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+        request.resource.data.status == 'success'
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}
