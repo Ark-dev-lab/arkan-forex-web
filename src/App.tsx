@@ -15,7 +15,7 @@ import { AccountModal } from './components/AccountModal';
 import { WalletModal } from './components/WalletModal';
 import { PaymentSimulator } from './components/PaymentSimulator';
 import { Activity, LogOut, User as UserIcon, TrendingUp, DollarSign, Settings, Bot, Wallet, ChevronDown, X, MessageSquareText } from 'lucide-react';
-import { handleFirestoreError } from './utils/errorHandling';
+import { handleFirestoreError } from './errorHandling';
 import { evaluateAutoTrade } from './services/gemini';
 import { calculateProfit, getMultiplier, getPipValue } from './utils/trading';
 
