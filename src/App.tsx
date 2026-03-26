@@ -20,7 +20,7 @@ import { evaluateAutoTrade } from './services/gemini';
 import { calculateProfit, getMultiplier, getPipValue } from './utils/trading';
 
 import { MarketOverview } from './components/MarketOverview';
-import { MarketAsset } from './types';
+import { MarketAsset } from './services/types';
 
 interface AINotification {
   id: string;
@@ -40,6 +40,12 @@ const INITIAL_ASSETS: MarketAsset[] = [
 export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const payId = urlParams.get('pay');
+
+  // Example usage of import.meta.env
+  const isDev = import.meta.env.MODE === 'development';
+  if (isDev) {
+    console.log('Running in development mode');
+  }
 
   // If we have a payId, we render the simulator immediately
   // This allows unauthenticated access from any device (like a phone scanning a QR code)
